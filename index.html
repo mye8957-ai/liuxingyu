@@ -1,0 +1,523 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>对着流星许愿</title>
+<style>
+  :root{
+    --ink:#fff;
+    --dim:rgba(255,255,255,.58);
+    --line:rgba(255,255,255,.14);
+    --glass:rgba(150,150,150,.55);
+    --safe-b:max(env(safe-area-inset-bottom),14px);
+    --nav-h:62px;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+  html,body{height:100%;background:#000;overflow:hidden;color:var(--ink);
+    font-family:-apple-system,"PingFang SC","PingFang TC","Noto Sans CJK SC","Microsoft YaHei",sans-serif}
+  canvas{position:fixed;inset:0;width:100%;height:100%;display:block}
+  button{font-family:inherit}
+
+  /* ---------- toast ---------- */
+  .toast{position:fixed;left:50%;top:max(env(safe-area-inset-top),8px);width:min(92vw,520px);
+    transform:translate(-50%,-140%);opacity:0;display:flex;align-items:center;gap:14px;
+    padding:14px 22px;border-radius:30px;background:var(--glass);
+    backdrop-filter:blur(18px) saturate(1.2);-webkit-backdrop-filter:blur(18px) saturate(1.2);
+    box-shadow:0 8px 30px rgba(0,0,0,.4);z-index:9;pointer-events:none;
+    transition:transform .6s cubic-bezier(.2,.9,.25,1.1),opacity .4s,background .3s}
+  .toast.show{transform:translate(-50%,0);opacity:1}
+  .toast.warn{background:rgba(170,110,110,.6)}
+  .toast svg{width:54px;height:54px;flex:none;fill:#1b1b1b}
+  .toast .t{flex:1;min-width:0}
+  .toast b{display:block;font-size:17px;font-weight:600;color:#111}
+  .toast span{display:block;font-size:14px;color:rgba(0,0,0,.55);margin-top:1px}
+  .toast time{font-size:15px;color:rgba(0,0,0,.45)}
+
+  /* ---------- flying wish ---------- */
+  .flyer{position:fixed;left:0;top:0;z-index:3;pointer-events:none;will-change:transform}
+  .ft{position:absolute;left:0;top:0;white-space:nowrap;font-size:20px;font-weight:600;letter-spacing:.03em;
+    text-shadow:0 0 12px rgba(255,255,255,.55);will-change:transform,opacity}
+  .fp{position:absolute;left:0;top:0;width:44px;height:44px;opacity:0;
+    filter:drop-shadow(0 0 8px rgba(255,255,255,.9));will-change:transform,opacity}
+
+  /* ---------- wish input ---------- */
+  .bar{position:fixed;left:50%;bottom:calc(var(--safe-b) + var(--nav-h) + 14px);transform:translateX(-50%);
+    width:min(94vw,560px);display:flex;gap:10px;align-items:center;padding:10px;border-radius:34px;
+    background:linear-gradient(180deg,rgba(255,255,255,.08),rgba(255,255,255,.02));
+    border:1px solid rgba(255,255,255,.18);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);z-index:4;
+    transition:opacity .3s,visibility 0s}
+  .bar input{flex:1;min-width:0;height:44px;padding:0 20px;border-radius:24px;background:rgba(0,0,0,.35);
+    border:1px solid rgba(255,255,255,.28);color:#fff;font-size:17px;outline:none;font-family:inherit}
+  .bar input::placeholder{color:rgba(255,255,255,.62)}
+  .bar input:focus-visible{border-color:rgba(255,255,255,.7);box-shadow:0 0 0 3px rgba(255,255,255,.12)}
+  .bar input.shake{animation:shake .38s}
+  @keyframes shake{20%,60%{transform:translateX(-6px)}40%,80%{transform:translateX(6px)}}
+  .bar button{flex:none;width:64px;height:44px;border-radius:24px;border:0;background:rgba(160,160,160,.75);
+    color:#fff;cursor:pointer;display:grid;place-items:center;transition:transform .15s,background .2s}
+  .bar button:hover{background:rgba(190,190,190,.85)}
+  .bar button:active{transform:scale(.94)}
+  .bar button:focus-visible{outline:2px solid #fff;outline-offset:2px}
+  .bar button svg{width:22px;height:22px;stroke:#fff;fill:none;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
+
+  /* ---------- bottom nav ---------- */
+  .nav{position:fixed;left:50%;bottom:var(--safe-b);transform:translateX(-50%);width:min(94vw,560px);height:var(--nav-h);
+    display:flex;padding:6px;gap:6px;border-radius:34px;z-index:6;
+    background:rgba(24,24,24,.6);border:1px solid rgba(255,255,255,.18);
+    backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px)}
+  .nav button{flex:1;border:0;border-radius:28px;background:transparent;color:var(--dim);cursor:pointer;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;font-size:12px;
+    transition:background .25s,color .25s}
+  .nav button svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+  .nav button .fill{fill:currentColor;stroke:none}
+  .nav button[aria-selected="true"]{background:rgba(255,255,255,.14);color:#fff}
+  .nav button:focus-visible{outline:2px solid #fff;outline-offset:-2px}
+
+  /* ---------- history ---------- */
+  .history{position:fixed;inset:0;z-index:3;background:rgba(0,0,0,.6);overflow-y:auto;-webkit-overflow-scrolling:touch;
+    padding:max(env(safe-area-inset-top),24px) 22px calc(var(--safe-b) + var(--nav-h) + 28px);
+    opacity:0;visibility:hidden;transition:opacity .3s,visibility 0s .3s}
+  .history .inner{width:min(100%,560px);margin:0 auto;padding-top:20px}
+  .history h1{font-size:24px;font-weight:600;letter-spacing:.04em}
+  .history .sub{font-size:13px;color:var(--dim);margin-top:6px}
+  .list{list-style:none;margin-top:22px;border-top:1px solid var(--line)}
+  .item{display:flex;align-items:center;gap:14px;padding:16px 4px;border-bottom:1px solid var(--line);
+    user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;touch-action:pan-y;
+    transition:background .2s,transform .2s}
+  .item.press{background:rgba(255,255,255,.08);transform:scale(.985)}
+  .item .mk{flex:none;width:22px;text-align:center;font-size:18px;color:#fff}
+  .item .tx{flex:1;min-width:0}
+  .item .wt{font-size:17px;line-height:1.4;word-break:break-all}
+  .item time{display:block;font-size:12.5px;color:var(--dim);margin-top:4px}
+  .item .st{flex:none;font-size:12.5px;padding:4px 11px;border-radius:14px;border:1px solid rgba(255,255,255,.4);color:#fff}
+  .item.done .st{background:#fff;color:#000;border-color:#fff}
+  .item.missed .wt{color:var(--dim)}
+  .item.missed .mk{color:var(--dim)}
+  .item.missed .st{border-style:dashed;border-color:rgba(255,255,255,.28);color:var(--dim)}
+  .empty{margin-top:90px;text-align:center;color:var(--dim);font-size:15px;line-height:1.8}
+  .empty i{display:block;font-style:normal;font-size:26px;margin-bottom:8px;color:#fff}
+  body[data-tab="history"] .history{opacity:1;visibility:visible;transition:opacity .3s}
+  body[data-tab="history"] .bar{opacity:0;visibility:hidden;pointer-events:none;transition:opacity .25s,visibility 0s .25s}
+
+  /* ---------- action sheet ---------- */
+  .sheet-back{position:fixed;inset:0;z-index:8;background:rgba(0,0,0,.45);opacity:0;visibility:hidden;
+    transition:opacity .25s,visibility 0s .25s}
+  .sheet-back.open{opacity:1;visibility:visible;transition:opacity .25s}
+  .sheet{position:absolute;left:50%;bottom:var(--safe-b);width:min(94vw,560px);transform:translate(-50%,30px);
+    border-radius:28px;background:rgba(32,32,32,.88);border:1px solid rgba(255,255,255,.16);
+    backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);overflow:hidden;
+    transition:transform .3s cubic-bezier(.2,.9,.25,1)}
+  .sheet-back.open .sheet{transform:translate(-50%,0)}
+  .sheet .ttl{padding:16px 20px 12px;font-size:13.5px;color:var(--dim);text-align:center;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .sheet button{position:relative;display:flex;align-items:center;justify-content:center;width:100%;height:54px;border:0;
+    border-top:1px solid var(--line);background:transparent;color:#fff;font-size:17px;cursor:pointer}
+  .sheet button:hover{background:rgba(255,255,255,.07)}
+  .sheet button:focus-visible{outline:2px solid #fff;outline-offset:-2px}
+  .sheet button.danger{color:#ff8a8a}
+  .sheet button.cancel{color:var(--dim)}
+  .sheet button .ck{position:absolute;left:22px;opacity:0}
+  .sheet button.cur .ck{opacity:1}
+
+  @media (prefers-reduced-motion:reduce){
+    .toast{transition:opacity .2s}
+    .bar input.shake{animation:none}
+  }
+</style>
+</head>
+<body data-tab="wish">
+<canvas id="sky" aria-hidden="true"></canvas>
+
+<div class="toast" id="toast" role="status" aria-live="polite">
+  <svg viewBox="0 0 100 100" aria-hidden="true"><path d="M50 2 C54 34 66 46 98 50 C66 54 54 66 50 98 C46 66 34 54 2 50 C34 46 46 34 50 2Z"/></svg>
+  <div class="t"><b id="toastTitle"></b><span id="toastSub"></span></div>
+  <time>now</time>
+</div>
+
+<!-- history page -->
+<section class="history" id="history" aria-label="历史愿望">
+  <div class="inner">
+    <h1>历史</h1>
+    <p class="sub" id="histSub"></p>
+    <ul class="list" id="list"></ul>
+    <p class="empty" id="empty" hidden><i>☆</i>还没有许过愿<br>回到“许愿”，对着流星说出第一个吧</p>
+  </div>
+</section>
+
+<!-- wish input -->
+<form class="bar" id="form" autocomplete="off">
+  <input id="inp" type="text" placeholder="对着流星许下愿望✨" enterkeyhint="send" aria-label="许下愿望">
+  <button type="submit" aria-label="发送愿望">
+    <svg viewBox="0 0 24 24"><path d="M12 19V5M5 12l7-7 7 7"/></svg>
+  </button>
+</form>
+
+<!-- bottom nav -->
+<nav class="nav" role="tablist" aria-label="底部导航">
+  <button role="tab" id="tabWish" data-tab="wish" aria-selected="true">
+    <svg viewBox="0 0 24 24"><path class="fill" d="M12 2c.6 5 2.6 7.4 9 10-6.4 2.6-8.4 5-9 10-.6-5-2.6-7.4-9-10 6.4-2.6 8.4-5 9-10z"/></svg>
+    许愿
+  </button>
+  <button role="tab" id="tabHist" data-tab="history" aria-selected="false">
+    <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.2 2"/></svg>
+    历史
+  </button>
+</nav>
+
+<!-- long-press action sheet -->
+<div class="sheet-back" id="sheetBack">
+  <div class="sheet" role="dialog" aria-modal="true" aria-label="愿望操作">
+    <p class="ttl" id="sheetTitle"></p>
+    <button data-act="pending"><span class="ck">✓</span>待实现</button>
+    <button data-act="done"><span class="ck">✓</span>已实现</button>
+    <button data-act="missed"><span class="ck">✓</span>未实现</button>
+    <button data-act="delete" class="danger">删除愿望</button>
+    <button data-act="cancel" class="cancel">取消</button>
+  </div>
+</div>
+
+<script>
+(() => {
+  const $ = s => document.querySelector(s);
+  const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const smooth = (a, b, x) => { x = Math.min(1, Math.max(0, (x - a) / (b - a))); return x * x * (3 - 2 * x); };
+
+  /* =====================  SKY  ===================== */
+  const cv = $('#sky'), ctx = cv.getContext('2d');
+  let W, H, dpr, stars = [];
+  const meteors = [], particles = [], flashes = [], wishTimes = [];
+
+  function resize(){
+    dpr = Math.min(devicePixelRatio || 1, 2);
+    W = innerWidth; H = innerHeight;
+    cv.width = W * dpr; cv.height = H * dpr;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    const n = Math.round(W * H / 2600);
+    stars = Array.from({length: n}, () => ({
+      x: Math.random() * W, y: Math.random() * H,
+      r: Math.random() < .08 ? 1.6 : Math.random() * 1.1 + .3,
+      a: Math.random() * .7 + .2, p: Math.random() * 6.28, s: Math.random() * .02 + .004
+    }));
+  }
+  addEventListener('resize', resize);
+  resize();
+
+  const inView = (x, y) => x > -30 && x < W + 30 && y > -30 && y < H + 30;
+  // true while any part of the streak is still on screen (samples along its length)
+  function segVisible(m, L){
+    for (let k = 0; k <= 6; k++){
+      const f = k / 6;
+      if (inView(m.x - m.dx * L * f, m.y - m.dy * L * f)) return true;
+    }
+    return false;
+  }
+
+  // mostly slow, some medium, a few quick (px per frame @60fps)
+  function randSpeed(){
+    const r = Math.random();
+    if (r < .55) return 1.3 + Math.random() * 1.9;
+    if (r < .88) return 3.4 + Math.random() * 2.6;
+    return 6.5 + Math.random() * 4;
+  }
+
+  function ambient(prefill){
+    const ang = (135 + (Math.random() - .5) * 6) * Math.PI / 180;
+    const m = {
+      dx: Math.cos(ang), dy: Math.sin(ang), v: randSpeed(),
+      len: 80 + Math.random() * Math.min(H, 760) * .5,
+      a: .3 + Math.random() * .55, w: Math.random() < .3 ? 2 : 1.3,
+      d: 0, entered: false, wish: false
+    };
+    // pick a point on the line x+y=c just outside the top/right edge -> covers the whole screen
+    const c = Math.random() * (W + H);
+    if (c <= W){ m.x = c + 14; m.y = -14; } else { m.x = W + 14; m.y = c - W - 14; }
+    if (prefill){
+      const sx = m.x, sy = m.y;
+      let ok = false;
+      for (let t = 0; t < 8 && !ok; t++){
+        const d = Math.random() * (W + H) * .9;
+        m.x = sx + m.dx * d; m.y = sy + m.dy * d; m.d = d;
+        ok = segVisible(m, m.len);
+      }
+      if (!ok) return;
+      m.entered = true;
+    }
+    meteors.push(m);
+  }
+
+  const baseTarget = () => Math.max(12, Math.min(24, Math.round(W * H / 30000) + 6));
+  for (let i = 0; i < baseTarget(); i++) ambient(true);
+
+  // gradual surge after a wish: rises, holds, then eases off
+  function boost(now){
+    let b = 0;
+    for (let i = wishTimes.length - 1; i >= 0; i--){
+      const s = (now - wishTimes[i]) / 1000;
+      if (s > 11){ wishTimes.splice(i, 1); continue; }
+      b = Math.max(b, smooth(0, 3.5, s) * (1 - smooth(5.5, 10, s)));
+    }
+    return b;
+  }
+
+  function drawMeteor(m, tx, ty){
+    const g = ctx.createLinearGradient(m.x, m.y, tx, ty);
+    ctx.lineCap = 'round';
+    if (m.wish){
+      g.addColorStop(0, 'rgba(255,255,255,1)');
+      g.addColorStop(.25, 'rgba(255,244,214,.78)');
+      g.addColorStop(1, 'rgba(255,228,165,0)');
+      ctx.save();
+      ctx.shadowColor = 'rgba(255,235,190,.95)'; ctx.shadowBlur = 16;
+      ctx.strokeStyle = g; ctx.lineWidth = m.w;
+      ctx.beginPath(); ctx.moveTo(m.x, m.y); ctx.lineTo(tx, ty); ctx.stroke();
+      ctx.restore();
+      const rg = ctx.createRadialGradient(m.x, m.y, 0, m.x, m.y, 22);
+      rg.addColorStop(0, 'rgba(255,255,255,.95)');
+      rg.addColorStop(.35, 'rgba(255,240,200,.35)');
+      rg.addColorStop(1, 'rgba(255,240,200,0)');
+      ctx.fillStyle = rg; ctx.beginPath(); ctx.arc(m.x, m.y, 22, 0, 6.2832); ctx.fill();
+    } else {
+      g.addColorStop(0, `rgba(255,255,255,${m.a})`);
+      g.addColorStop(.55, `rgba(255,255,255,${m.a * .35})`);
+      g.addColorStop(1, 'rgba(255,255,255,0)');
+      ctx.strokeStyle = g; ctx.lineWidth = m.w;
+      ctx.beginPath(); ctx.moveTo(m.x, m.y); ctx.lineTo(tx, ty); ctx.stroke();
+    }
+  }
+
+  let last = 0;
+  function frame(ts){
+    const dt = Math.min((ts - last) / 16.67 || 1, 3); last = ts;
+    ctx.clearRect(0, 0, W, H);
+
+    ctx.fillStyle = '#fff';
+    for (const s of stars){
+      s.p += s.s * dt;
+      ctx.globalAlpha = s.a * (reduce ? 1 : .6 + .4 * Math.sin(s.p));
+      ctx.beginPath(); ctx.arc(s.x, s.y, s.r, 0, 6.2832); ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+
+    let amb = 0;
+    for (let i = meteors.length - 1; i >= 0; i--){
+      const m = meteors[i];
+      if (!reduce){ m.x += m.dx * m.v * dt; m.y += m.dy * m.v * dt; m.d += m.v * dt; }
+      const L = m.wish ? m.len * smooth(0, 1, (m.d + 8) / (m.len * .8)) : m.len;
+      drawMeteor(m, m.x - m.dx * L, m.y - m.dy * L);
+      if (m.wish && !reduce && Math.random() < .7){
+        particles.push({x: m.x + (Math.random() - .5) * 8, y: m.y + (Math.random() - .5) * 8,
+          vx: (Math.random() - .5) * .4, vy: (Math.random() - .5) * .4 + .15,
+          life: 0, max: 40 + Math.random() * 30, r: Math.random() * 1.3 + .5});
+      }
+      const vis = segVisible(m, L);
+      if (vis) m.entered = true;
+      // only retire a streak once its whole length has left the screen (no pop-out)
+      if ((m.entered && !vis) || m.d > (W + H) * 1.7 + m.len) meteors.splice(i, 1);
+      else if (!m.wish) amb++;
+    }
+
+    for (let i = particles.length - 1; i >= 0; i--){
+      const p = particles[i];
+      p.life += dt; p.x += p.vx * dt; p.y += p.vy * dt;
+      if (p.life >= p.max){ particles.splice(i, 1); continue; }
+      ctx.globalAlpha = (1 - p.life / p.max) * .9;
+      ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, 6.2832); ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+
+    for (let i = flashes.length - 1; i >= 0; i--){
+      const f = flashes[i]; f.t += dt;
+      const k = f.t / 36;
+      if (k >= 1){ flashes.splice(i, 1); continue; }
+      const r = 10 + 70 * k;
+      const rg = ctx.createRadialGradient(f.x, f.y, 0, f.x, f.y, r);
+      rg.addColorStop(0, `rgba(255,255,255,${.9 * (1 - k)})`);
+      rg.addColorStop(.4, `rgba(255,240,200,${.35 * (1 - k)})`);
+      rg.addColorStop(1, 'rgba(255,240,200,0)');
+      ctx.fillStyle = rg; ctx.beginPath(); ctx.arc(f.x, f.y, r, 0, 6.2832); ctx.fill();
+    }
+    ctx.fillStyle = '#fff';
+
+    if (!reduce){
+      const b = boost(ts);
+      if (amb < baseTarget() + Math.round(b * 10) && Math.random() < (.06 + .1 * b) * dt) ambient(false);
+    }
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+
+  /* =====================  WISH FLIGHT  ===================== */
+  const PLANE = '<svg class="fp" viewBox="0 0 24 24" aria-hidden="true"><path d="M2.5 11.2 21.5 2.8 15.6 21.2 11.6 14.2z" fill="#fff"/><path d="M11.6 14.2 21.5 2.8" stroke="rgba(0,0,0,.35)" stroke-width="1" fill="none"/></svg>';
+
+  function launchWish(p){
+    flashes.push({x: p.x, y: p.y, t: 0});
+    if (reduce) return;
+    const a = 52 * Math.PI / 180;
+    meteors.push({x: p.x, y: p.y, dx: Math.cos(a), dy: Math.sin(a), v: 4,
+      len: Math.min(520, Math.max(300, H * .45)), a: 1, w: 3.2, d: 0, entered: true, wish: true});
+  }
+
+  function flyWish(text, from){
+    const el = document.createElement('div');
+    el.className = 'flyer';
+    el.innerHTML = '<span class="ft"></span>' + PLANE;
+    const ft = el.querySelector('.ft'), fp = el.querySelector('.fp');
+    ft.textContent = text;
+    document.body.appendChild(el);
+
+    // approximate path: bottom → right-mid → upper-right arc → upper-center, then becomes meteor
+    const p0 = from, p1 = {x: W * .88, y: H * .62}, p2 = {x: W * .78, y: H * .22};
+    const p3 = {x: W * .48, y: Math.max(100, H * .11)};
+    const bez = u => { const v = 1 - u;
+      return {x: v*v*v*p0.x + 3*v*v*u*p1.x + 3*v*u*u*p2.x + u*u*u*p3.x,
+              y: v*v*v*p0.y + 3*v*v*u*p1.y + 3*v*u*u*p2.y + u*u*u*p3.y}; };
+    const dbez = u => { const v = 1 - u;
+      return {x: 3*v*v*(p1.x-p0.x) + 6*v*u*(p2.x-p1.x) + 3*u*u*(p3.x-p2.x),
+              y: 3*v*v*(p1.y-p0.y) + 6*v*u*(p2.y-p1.y) + 3*u*u*(p3.y-p2.y)}; };
+
+    const D = reduce ? 900 : 3600, t0 = performance.now();
+    function step(now){
+      const t = Math.min(1, (now - t0) / D);
+      const e = t < .5 ? 4*t*t*t : 1 - Math.pow(-2*t + 2, 3) / 2;
+      const pos = bez(e), d = dbez(e);
+      const ang = Math.atan2(d.y, d.x) * 180 / Math.PI;
+      el.style.transform = `translate(${pos.x}px,${pos.y}px)`;
+      const tilt = reduce ? 0 : Math.sin(t * Math.PI * 3) * 10;
+      ft.style.transform = `translate(-50%,-50%) rotate(${tilt}deg) scale(${1 - .72 * smooth(0, .6, t)})`;
+      ft.style.opacity = 1 - smooth(.34, .6, t);
+      fp.style.transform = `translate(-50%,-50%) rotate(${ang + 44}deg) scale(${1.1 - .55 * smooth(.4, 1, t)})`;
+      fp.style.opacity = smooth(.4, .62, t) * (1 - smooth(.94, 1, t));
+      if (!reduce && t > .08){
+        for (let k = 0; k < 2; k++) particles.push({x: pos.x + (Math.random()-.5)*10, y: pos.y + (Math.random()-.5)*10,
+          vx: (Math.random()-.5)*.5, vy: (Math.random()-.5)*.5, life: 0, max: 30 + Math.random()*25, r: Math.random()*1.2 + .4});
+      }
+      if (t < 1) requestAnimationFrame(step);
+      else { el.remove(); launchWish(p3); }
+    }
+    requestAnimationFrame(step);
+  }
+
+  /* =====================  TOAST  ===================== */
+  const toast = $('#toast');
+  let toastTimer;
+  function showToast(title, sub, warn){
+    $('#toastTitle').textContent = title;
+    $('#toastSub').textContent = sub;
+    toast.classList.toggle('warn', !!warn);
+    toast.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => toast.classList.remove('show'), warn ? 2400 : 3200);
+  }
+
+  /* =====================  DATA  ===================== */
+  const KEY = 'meteor-wishes.v1';
+  let wishes = [];
+  try { wishes = JSON.parse(localStorage.getItem(KEY) || '[]'); } catch(e){ wishes = []; }
+  const save = () => { try { localStorage.setItem(KEY, JSON.stringify(wishes)); } catch(e){} };
+  const LABEL = {pending: '待实现', done: '已实现', missed: '未实现'};
+  const pad = n => String(n).padStart(2, '0');
+  function fmtTime(ts){
+    const d = new Date(ts), now = new Date();
+    const y = d.getFullYear() === now.getFullYear() ? '' : d.getFullYear() + '年';
+    return `${y}${d.getMonth() + 1}月${d.getDate()}日 ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  }
+
+  /* =====================  HISTORY  ===================== */
+  const list = $('#list'), empty = $('#empty'), histSub = $('#histSub');
+  function render(){
+    list.innerHTML = '';
+    const sorted = wishes.slice().sort((a, b) => b.ts - a.ts);
+    empty.hidden = sorted.length > 0;
+    list.hidden = sorted.length === 0;
+    const done = wishes.filter(w => w.status === 'done').length;
+    histSub.textContent = sorted.length ? `共 ${sorted.length} 个愿望，${done} 个已实现 · 长按可标记或删除` : '';
+    for (const w of sorted){
+      const li = document.createElement('li');
+      li.className = 'item ' + w.status;
+      li.dataset.id = w.id;
+      li.innerHTML = '<span class="mk"></span><div class="tx"><p class="wt"></p><time></time></div><span class="st"></span>';
+      li.querySelector('.mk').textContent = w.status === 'done' ? '★' : '☆';
+      li.querySelector('.wt').textContent = w.text;
+      li.querySelector('time').textContent = fmtTime(w.ts);
+      li.querySelector('.st').textContent = LABEL[w.status];
+      list.appendChild(li);
+    }
+  }
+
+  /* long press (touch + mouse) and right-click */
+  let pressTimer, pressEl, startX, startY;
+  const clearPress = () => { clearTimeout(pressTimer); if (pressEl) pressEl.classList.remove('press'); pressEl = null; };
+  list.addEventListener('pointerdown', e => {
+    const li = e.target.closest('.item'); if (!li) return;
+    pressEl = li; startX = e.clientX; startY = e.clientY;
+    li.classList.add('press');
+    pressTimer = setTimeout(() => {
+      const id = li.dataset.id; clearPress();
+      if (navigator.vibrate) navigator.vibrate(15);
+      openSheet(id);
+    }, 520);
+  });
+  list.addEventListener('pointermove', e => {
+    if (pressEl && Math.hypot(e.clientX - startX, e.clientY - startY) > 10) clearPress();
+  });
+  ['pointerup', 'pointerleave', 'pointercancel'].forEach(t => list.addEventListener(t, clearPress));
+  list.addEventListener('contextmenu', e => {
+    const li = e.target.closest('.item');
+    if (li){ e.preventDefault(); clearPress(); if (!sheetBack.classList.contains('open')) openSheet(li.dataset.id); }
+  });
+
+  /* action sheet */
+  const sheetBack = $('#sheetBack');
+  let sheetId = null;
+  function openSheet(id){
+    const w = wishes.find(x => x.id === id); if (!w) return;
+    sheetId = id;
+    $('#sheetTitle').textContent = '“' + w.text + '”';
+    sheetBack.querySelectorAll('[data-act]').forEach(b => b.classList.toggle('cur', b.dataset.act === w.status));
+    sheetBack.classList.add('open');
+  }
+  const closeSheet = () => { sheetBack.classList.remove('open'); sheetId = null; };
+  sheetBack.addEventListener('click', e => {
+    if (e.target === sheetBack){ closeSheet(); return; }
+    const b = e.target.closest('[data-act]'); if (!b) return;
+    const act = b.dataset.act, w = wishes.find(x => x.id === sheetId);
+    if (w && act === 'delete') wishes = wishes.filter(x => x.id !== sheetId);
+    else if (w && (act === 'pending' || act === 'done' || act === 'missed')) w.status = act;
+    save(); render(); closeSheet();
+  });
+  addEventListener('keydown', e => { if (e.key === 'Escape') closeSheet(); });
+
+  /* tabs */
+  document.querySelectorAll('.nav button').forEach(b => b.addEventListener('click', () => {
+    const tab = b.dataset.tab;
+    document.body.dataset.tab = tab;
+    document.querySelectorAll('.nav button').forEach(x => x.setAttribute('aria-selected', x === b));
+    if (tab === 'history'){ inp.blur(); render(); $('#history').scrollTop = 0; }
+  }));
+
+  /* =====================  SUBMIT  ===================== */
+  const form = $('#form'), inp = $('#inp');
+  const shake = () => { inp.classList.remove('shake'); void inp.offsetWidth; inp.classList.add('shake'); };
+  form.addEventListener('submit', e => {
+    e.preventDefault();
+    const v = inp.value.trim();
+    if (!v){ shake(); inp.focus(); return; }
+    if (Array.from(v).length > 15){
+      showToast('您的愿望过长', '请控制在 15 个字以内', true);
+      shake(); return;
+    }
+    const r = inp.getBoundingClientRect();
+    const from = {x: r.left + r.width / 2, y: r.top + r.height / 2 - 6};
+    wishes.push({id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6), text: v, ts: Date.now(), status: 'pending'});
+    save();
+    inp.value = ''; inp.blur();
+    showToast('许愿成功', '你将得偿所愿');
+    wishTimes.push(performance.now());
+    flyWish(v, from);
+  });
+
+  render();
+})();
+</script>
+</body>
+</html>
